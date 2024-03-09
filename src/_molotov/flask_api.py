@@ -1,30 +1,41 @@
 import os
 import math
 
-from dotenv import load_dotenv
 from functools import lru_cache
 from flask import Flask, request, jsonify
 from colbert.infra import Run, RunConfig, ColBERTConfig
 from colbert import Indexer, Searcher
 
 from pretrained_model import RAGPretrainedModel
+import json
 
-load_dotenv()
+def save_indices():
+    with open('indices.json', 'w') as f:
+        json.dump(list(indices.keys()), f)
 
-INDEX_ROOT = os.getenv("INDEX_ROOT")
+def load_indices():
+    try:
+        with open('indices.json', 'r') as f:
+            index_names = json.load(f)
+            for index_name in index_names:
+                indices[index_name] = {"index": RAGPretrainedModel.from_index("indices/colbert/indexes/{}".format(index_name)),"searcher": Searcher(index=index_name)}
+    except FileNotFoundError:
+        print("No indices file found. Starting with an empty index.")
 
-RAG = RAGPretrainedModel.from_pretrained("colbert-ir/colbertv2.0", index_root=INDEX_ROOT)
+RAG = RAGPretrainedModel.from_pretrained("colbert-ir/colbertv2.0")
 
 app = Flask(__name__)
 
 counter = {"api" : 0}
 
 indices = {}
+load_indices()
 
 @app.route("/api/delete_index/<index_name>", methods=["GET"])
 def delete_index(index_name):
     if index_name in indices:
         del indices[index_name]
+        save_indices()
         return {"message": "Index deleted successfully"}, 200
     else:
         return {"error": "Index not found"}, 404
@@ -46,23 +57,32 @@ def add_document(index_name, collections):
     if not index_name or not document or not collections:
         return jsonify({"error": "Missing index_name, collections, or document"}), 400
     
+    # Ensure document_metadata is not None
+    if document_metadata is None:
+        document_metadata = {}
+
     # Create index if it does not exist
     if index_name not in indices:
+        indices[index_name] = {}
         RAG.index(
             [document],
             index_name=index_name,
             document_metadatas=[document_metadata]
         )
-        indices[index_name] = Searcher(index=index_name, index_root=index_root)
+        indices[index_name]["index"] = RAGPretrainedModel.from_index("indices/colbert/indexes/{}".format(index_name))
+        indices[index_name]["searcher"] = Searcher(index=index_name)
     else:
-        RAG.add_to_index(
+        # Ensure new_pid_docid_map is correctly formatted
+        new_pid_docid_map = {0: str(document_id)}  # Convert document_id to string if it's not already
+        new_docid_metadata_map = [document_metadata]  # Ensure this is a list of dictionaries
+        
+        indices[index_name]["index"].add_to_index(
             [document],
-            index_name=index_name,
-            document_metadatas=[document_metadata]
+            index_name=index_name
         )
-        # TODO: Figure out if I need to reinstantiate this
-        indices[index_name] = Searcher(index=index_name, index_root=index_root)
+        indices[index_name] = Searcher(index=index_name)
     
+    save_indices()
     return jsonify({"message": "Document added successfully"}), 200
 
 @lru_cache(maxsize=1000000)
