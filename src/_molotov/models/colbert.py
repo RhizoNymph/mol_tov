@@ -83,7 +83,7 @@ class ColBERT(LateInteractionModel):
             # TODO: Modify root assignment when loading from HF
 
         else:
-            self.index_root = index_root if index_root is not None else ".ragatouille/"
+            self.index_root = index_root if index_root is not None else "indices/"
             ckpt_config = ColBERTConfig.load_from_checkpoint(
                 str(pretrained_model_name_or_path)
             )
@@ -98,7 +98,7 @@ class ColBERT(LateInteractionModel):
             self.checkpoint = pretrained_model_name_or_path
             self.index_name = index_name
             self.config.experiment = "colbert"
-            self.config.root = ".ragatouille/"
+            self.config.root = "indices/"
 
         if not training_mode:
             self.inference_ckpt = Checkpoint(
