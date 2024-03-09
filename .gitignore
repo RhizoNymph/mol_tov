@@ -3,3 +3,4 @@
 indices/*
 models/*
 *.pyc
+*pycache*
